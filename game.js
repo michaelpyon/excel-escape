@@ -241,7 +241,8 @@ class Spreadsheet {
 
             // Try numeric evaluation
             const result = this.safeEval(expr);
-            if (typeof result === "number" && !isNaN(result)) {
+            if (typeof result === "number") {
+                if (!isFinite(result)) return "#DIV/0!";
                 return Math.round(result * 1e10) / 1e10; // avoid floating point weirdness
             }
             return result;
@@ -498,21 +499,53 @@ class Spreadsheet {
     }
 
     safeEval(expr) {
-        // Only allow numbers, operators, parens, comparison, and basic math
-        const sanitized = String(expr).replace(/"/g, "'");
-        // Check for safe characters
-        if (/^[\d\s+\-*/().><=!&|'a-zA-Z,\s]+$/.test(sanitized)) {
-            try {
-                // Replace comparison operators for JS
-                let jsExpr = sanitized
-                    .replace(/(?<!=)=(?!=)/g, "==")
-                    .replace(/<>/g, "!=");
-                return Function('"use strict"; return (' + jsExpr + ")")();
-            } catch {
-                return "#ERROR";
-            }
+        // Strict whitelist: digits, math operators, comparison, parens, quoted strings only.
+        // No letters allowed at the eval stage. Function names and cell refs must be
+        // resolved upstream (processFunctions, replaceCellRefs) into numbers or quoted strings.
+        const raw = String(expr);
+
+        // Extract quoted string literals and replace with placeholders so we can
+        // tokenize them safely without letting their contents past the whitelist.
+        const literals = [];
+        const placeholderExpr = raw.replace(/"([^"]*)"|'([^']*)'/g, (m, dq, sq) => {
+            const v = dq !== undefined ? dq : sq;
+            literals.push(v);
+            return String(literals.length - 1);
+        });
+
+        // Now the only legal characters are: digits, decimal point, whitespace,
+        // arithmetic operators, comparisons, parens, and comma.
+        if (!/^[0-9\s+\-*/().,><=!&|]*$/.test(placeholderExpr)) {
+            return "#ERROR";
         }
-        return "#ERROR";
+
+        // If there are string literals, only allow simple equality / inequality
+        // comparisons or returning a single literal standalone.
+        if (literals.length > 0) {
+            const compact = placeholderExpr.replace(/\s/g, "");
+            const eqMatch = compact.match(/^([0-9]+)(==?|<>|!=)([0-9]+)$/);
+            if (eqMatch) {
+                const lhs = literals[parseInt(eqMatch[1], 10)];
+                const rhs = literals[parseInt(eqMatch[3], 10)];
+                const op = eqMatch[2];
+                if (op === "=" || op === "==") return lhs === rhs;
+                return lhs !== rhs;
+            }
+            const lone = compact.match(/^([0-9]+)$/);
+            if (lone) return literals[parseInt(lone[1], 10)];
+            return "#ERROR";
+        }
+
+        try {
+            const jsExpr = placeholderExpr
+                .replace(/(?<!=)=(?!=)/g, "==")
+                .replace(/<>/g, "!=");
+            // Number-only expression: safe for Function constructor since whitelist
+            // forbids any identifier characters.
+            return Function('"use strict"; return (' + jsExpr + ")")();
+        } catch {
+            return "#ERROR";
+        }
     }
 
     parseValue(str) {

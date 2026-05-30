@@ -1162,6 +1162,10 @@ class Game {
         this.els.modalStats.classList.remove("hidden");
         this.els.statTime.textContent = `+${timeBonus}`;
         this.els.statRoom.textContent = `+${roomScore}`;
+        // Restore stat row labels (victory screen may have relabeled them)
+        const rows = this.els.modalStats.querySelectorAll(".stat-row span:first-child");
+        if (rows[0]) rows[0].textContent = "Time Bonus:";
+        if (rows[1]) rows[1].textContent = "Room Score:";
 
         if (this.currentLevel < LEVELS.length - 1) {
             this.els.modalBtn.textContent = "Next Room \u{27A1}";
@@ -1198,10 +1202,17 @@ class Game {
     }
 
     showVictory() {
+        const time = this.formatRunTime();
         this.els.modalIcon.textContent = "\u{1F3C6}";
         this.els.modalTitle.textContent = "You Escaped!";
-        this.els.modalMessage.textContent = `You conquered all 10 rooms! Final Score: ${this.score}. You're now a spreadsheet master!`;
-        this.els.modalStats.classList.add("hidden");
+        this.els.modalMessage.textContent = `10/10 rooms cleared. You are a spreadsheet master.`;
+        this.els.modalStats.classList.remove("hidden");
+        this.els.statTime.textContent = time;
+        this.els.statRoom.textContent = this.score;
+        // Relabel the stat rows for the victory screen
+        const rows = this.els.modalStats.querySelectorAll(".stat-row span:first-child");
+        if (rows[0]) rows[0].textContent = "Total Time:";
+        if (rows[1]) rows[1].textContent = "Final Score:";
         this.els.modalBtn.textContent = "Play Again \u{1F504}";
         this.prepShare(true);
         this.els.modalOverlay.classList.remove("hidden");
@@ -1223,9 +1234,9 @@ class Game {
         const rooms = this.roomsCleared;
         const roomWord = rooms === 1 ? "room" : "rooms";
         if (escaped) {
-            return `I escaped the Formula Dungeon in ${time} and cleared all 10 rooms. Can you beat it?`;
+            return `I escaped the Formula Dungeon in ${time} with a score of ${this.score}. Can you beat it?`;
         }
-        return `I cleared ${rooms} ${roomWord} of the Formula Dungeon in ${time} before the walls got me. Can you beat it?`;
+        return `I cleared ${rooms} ${roomWord} of the Formula Dungeon (score: ${this.score}) before the walls got me. Can you beat it?`;
     }
 
     prepShare(escaped) {

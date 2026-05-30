@@ -1048,6 +1048,7 @@ class Game {
         this.els.shortcutTip.textContent = level.shortcutTip;
         this.els.feedbackMsg.textContent = "";
         this.els.feedbackMsg.className = "";
+        this.wrongAttempts = 0;
         this.els.timerDisplay.className = "timer-display";
         this.els.character.className = "";
         this.els.door.className = "";
@@ -1155,7 +1156,12 @@ class Game {
         if (correct) {
             this.levelComplete();
         } else {
-            this.els.feedbackMsg.textContent = `Not quite! Expected: ${level.expectedValue}. Hint: ${level.hint}`;
+            this.wrongAttempts = (this.wrongAttempts || 0) + 1;
+            if (this.wrongAttempts >= 2) {
+                this.els.feedbackMsg.textContent = `Not quite! Expected: ${level.expectedValue}. Hint: ${level.hint}`;
+            } else {
+                this.els.feedbackMsg.textContent = "Not quite, try again!";
+            }
             this.els.feedbackMsg.className = "error";
             // Shake the check button
             this.els.checkBtn.style.animation = "panic 0.3s ease-in-out";

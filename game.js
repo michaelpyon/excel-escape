@@ -814,7 +814,13 @@ class Game {
             statTime: document.getElementById("stat-time"),
             statRoom: document.getElementById("stat-room"),
             modalBtn: document.getElementById("modal-btn"),
+            shareRow: document.getElementById("share-row"),
+            shareCopyBtn: document.getElementById("share-copy-btn"),
+            shareTweetBtn: document.getElementById("share-tweet-btn"),
         };
+
+        this.runStartTime = 0;
+        this.roomsCleared = 0;
 
         // Create spreadsheet
         this.ss = new Spreadsheet(5, 7);
@@ -836,6 +842,8 @@ class Game {
         this.els.startBtn.addEventListener("click", () => this.startGame());
         this.els.checkBtn.addEventListener("click", () => this.checkAnswer());
         this.els.modalBtn.addEventListener("click", () => this.handleModalAction());
+        this.els.shareCopyBtn.addEventListener("click", () => this.copyShareResult());
+        this.els.shareTweetBtn.addEventListener("click", () => this.tweetShareResult());
 
         // Keyboard handler
         document.addEventListener("keydown", (e) => this.handleKeydown(e));
@@ -942,6 +950,8 @@ class Game {
     startGame() {
         this.currentLevel = 0;
         this.score = 0;
+        this.roomsCleared = 0;
+        this.runStartTime = Date.now();
         this.els.scoreVal.textContent = "0";
         this.els.startScreen.classList.add("hidden");
         this.els.gameScreen.classList.remove("hidden");
@@ -1084,6 +1094,8 @@ class Game {
         if (this.timerInterval) clearInterval(this.timerInterval);
         if (this.wallAnimFrame) cancelAnimationFrame(this.wallAnimFrame);
 
+        this.roomsCleared += 1;
+
         const level = LEVELS[this.currentLevel];
 
         // Score calculation
@@ -1157,6 +1169,7 @@ class Game {
             this.els.modalBtn.textContent = "See Results \u{1F3C6}";
         }
 
+        this.els.shareRow.classList.add("hidden");
         this.els.modalOverlay.classList.remove("hidden");
         this.modalAction = "next";
     }
@@ -1178,6 +1191,7 @@ class Game {
             this.els.modalMessage.textContent = `The walls got you in "${level.title}"! The answer was: ${level.hint}`;
             this.els.modalStats.classList.add("hidden");
             this.els.modalBtn.textContent = "Try Again \u{1F504}";
+            this.prepShare();
             this.els.modalOverlay.classList.remove("hidden");
             this.modalAction = "retry";
         }, 600);
@@ -1189,12 +1203,59 @@ class Game {
         this.els.modalMessage.textContent = `You conquered all 10 rooms! Final Score: ${this.score}. You're now a spreadsheet master!`;
         this.els.modalStats.classList.add("hidden");
         this.els.modalBtn.textContent = "Play Again \u{1F504}";
+        this.prepShare(true);
         this.els.modalOverlay.classList.remove("hidden");
         this.modalAction = "restart";
     }
 
+    formatRunTime() {
+        const totalSec = Math.max(0, Math.round((Date.now() - this.runStartTime) / 1000));
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        if (mins > 0) {
+            return `${mins}m ${secs}s`;
+        }
+        return `${secs}s`;
+    }
+
+    buildShareText(escaped) {
+        const time = this.formatRunTime();
+        const rooms = this.roomsCleared;
+        const roomWord = rooms === 1 ? "room" : "rooms";
+        if (escaped) {
+            return `I escaped the Formula Dungeon in ${time} and cleared all 10 rooms. Can you beat it?`;
+        }
+        return `I cleared ${rooms} ${roomWord} of the Formula Dungeon in ${time} before the walls got me. Can you beat it?`;
+    }
+
+    prepShare(escaped) {
+        this.shareText = this.buildShareText(!!escaped);
+        this.shareUrl = "https://excel-escape.vercel.app";
+        this.els.shareCopyBtn.textContent = "Copy result";
+        this.els.shareRow.classList.remove("hidden");
+    }
+
+    copyShareResult() {
+        const text = `${this.shareText} ${this.shareUrl}`;
+        const done = () => { this.els.shareCopyBtn.textContent = "Copied!"; };
+        const fail = () => { this.els.shareCopyBtn.textContent = "Copy failed"; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(fail);
+        } else {
+            fail();
+        }
+    }
+
+    tweetShareResult() {
+        const url = "https://twitter.com/intent/tweet?text=" +
+            encodeURIComponent(this.shareText) +
+            "&url=" + encodeURIComponent(this.shareUrl);
+        window.open(url, "_blank", "noopener,noreferrer");
+    }
+
     handleModalAction() {
         this.els.modalOverlay.classList.add("hidden");
+        this.els.shareRow.classList.add("hidden");
 
         if (this.modalAction === "next") {
             this.loadLevel(this.currentLevel + 1);
@@ -1202,6 +1263,8 @@ class Game {
             this.loadLevel(this.currentLevel);
         } else if (this.modalAction === "restart") {
             this.score = 0;
+            this.roomsCleared = 0;
+            this.runStartTime = Date.now();
             this.els.scoreVal.textContent = "0";
             this.loadLevel(0);
         }

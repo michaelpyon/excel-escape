@@ -144,6 +144,23 @@ const LEVELS = [
         lockedCells: ["A1", "A2", "A3", "A4", "A5"],
         hint: "=IF(SUM(A1:A5)>100,AVERAGE(A1:A5),0)"
     }
+    ,
+    {
+        id: 11,
+        title: "VLOOKUP Vault",
+        story: "The final vault! A price lookup table guards the exit. Use VLOOKUP to retrieve the price and open the door!",
+        instruction: "In D1, use VLOOKUP to find the price for the item code in C1 (look it up in A1:B5, return column 2, exact match)",
+        shortcutTip: "VLOOKUP(lookup, table, col_index, 0) - the 0 means exact match",
+        shortcutLesson: "VLOOKUP",
+        targetCell: "D1",
+        expectedValue: 35,
+        timeLimit: 75,
+        gridData: { A1: "A100", A2: "B200", A3: "C300", A4: "D400", A5: "E500",
+                    B1: 10,  B2: 25,  B3: 35,  B4: 50,  B5: 80,
+                    C1: "C300" },
+        lockedCells: ["A1","A2","A3","A4","A5","B1","B2","B3","B4","B5","C1"],
+        hint: "=VLOOKUP(C1,A1:B5,2,0)"
+    }
 ];
 
 // ── Spreadsheet Engine ────────────────────────
@@ -253,7 +270,7 @@ class Spreadsheet {
 
     processFunctions(expr) {
         // Process innermost function calls first (handles nesting)
-        const funcRegex = /(SUM|AVERAGE|AVG|MAX|MIN|COUNT|COUNTIF|IF|ABS|ROUND|INT)\(([^()]*)\)/i;
+        const funcRegex = /(SUM|AVERAGE|AVG|MAX|MIN|COUNT|COUNTIF|IF|ABS|ROUND|INT|VLOOKUP)\(([^()]*)\)/i;
         let maxIter = 20;
         while (funcRegex.test(expr) && maxIter-- > 0) {
             expr = expr.replace(funcRegex, (match, funcName, args) => {
@@ -284,6 +301,7 @@ class Spreadsheet {
                 return Math.round(this.evalArg(parts[0]));
             }
             case "INT": return Math.floor(this.evalArg(argsStr));
+            case "VLOOKUP": return this.fnVlookup(argsStr);
             default: return "#NAME?";
         }
     }
@@ -401,6 +419,60 @@ class Spreadsheet {
             }
         }
         return count;
+    }
+
+    fnVlookup(argsStr) {
+        // VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
+        // Supports exact match (range_lookup = 0 or FALSE or omitted-treated-as-exact
+        // when data is unsorted). For the puzzle use case, always does exact match.
+        const parts = this.splitArgs(argsStr);
+        if (parts.length < 3) return "#N/A";
+
+        // Resolve lookup value
+        let lookupRaw = parts[0].trim();
+        lookupRaw = this.replaceCellRefs(lookupRaw);
+        const strMatch = lookupRaw.match(/^["'](.*)["']$/);
+        let lookupVal;
+        if (strMatch) {
+            lookupVal = strMatch[1];
+        } else {
+            const n = parseFloat(lookupRaw);
+            lookupVal = isNaN(n) ? lookupRaw : n;
+        }
+
+        // Parse table range
+        const tableRangeStr = parts[1].trim();
+        const rangeMatch = tableRangeStr.match(/^([A-Z])(\d+):([A-Z])(\d+)$/i);
+        if (!rangeMatch) return "#N/A";
+
+        const startCol = rangeMatch[1].toUpperCase().charCodeAt(0) - 65;
+        const startRow = parseInt(rangeMatch[2]) - 1;
+        const endCol = rangeMatch[3].toUpperCase().charCodeAt(0) - 65;
+        const endRow = parseInt(rangeMatch[4]) - 1;
+
+        // Column index (1-based)
+        const colIdx = Math.round(parseFloat(parts[2].trim()));
+        if (isNaN(colIdx) || colIdx < 1 || colIdx > (endCol - startCol + 1)) return "#REF!";
+
+        // Search first column of table for lookup_value
+        for (let r = startRow; r <= endRow; r++) {
+            const firstKey = String.fromCharCode(65 + startCol) + (r + 1);
+            const cellVal = this.getCellValue(firstKey);
+            // Compare: numeric or string
+            const numCell = parseFloat(cellVal);
+            const numLookup = typeof lookupVal === "number" ? lookupVal : parseFloat(lookupVal);
+            let match = false;
+            if (!isNaN(numCell) && !isNaN(numLookup)) {
+                match = Math.abs(numCell - numLookup) < 0.0001;
+            } else {
+                match = String(cellVal).trim().toLowerCase() === String(lookupVal).trim().toLowerCase();
+            }
+            if (match) {
+                const returnKey = String.fromCharCode(65 + startCol + colIdx - 1) + (r + 1);
+                return this.getCellValue(returnKey);
+            }
+        }
+        return "#N/A";
     }
 
     fnIf(argsStr) {
@@ -789,6 +861,7 @@ class Game {
             startBtn: document.getElementById("start-btn"),
             roomTitle: document.getElementById("room-title"),
             roomNum: document.getElementById("room-num"),
+            roomTotal: document.getElementById("room-total"),
             timeLeft: document.getElementById("time-left"),
             timerDisplay: document.getElementById("timer-display"),
             scoreVal: document.getElementById("score-val"),
@@ -953,6 +1026,7 @@ class Game {
         this.roomsCleared = 0;
         this.runStartTime = Date.now();
         this.els.scoreVal.textContent = "0";
+        if (this.els.roomTotal) this.els.roomTotal.textContent = LEVELS.length;
         this.els.startScreen.classList.add("hidden");
         this.els.gameScreen.classList.remove("hidden");
         this.loadLevel(0);
@@ -1205,7 +1279,7 @@ class Game {
         const time = this.formatRunTime();
         this.els.modalIcon.textContent = "\u{1F3C6}";
         this.els.modalTitle.textContent = "You Escaped!";
-        this.els.modalMessage.textContent = `10/10 rooms cleared. You are a spreadsheet master.`;
+        this.els.modalMessage.textContent = `${LEVELS.length}/${LEVELS.length} rooms cleared. You are a spreadsheet master.`;
         this.els.modalStats.classList.remove("hidden");
         this.els.statTime.textContent = time;
         this.els.statRoom.textContent = this.score;

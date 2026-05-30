@@ -1,6 +1,6 @@
 # Excel Escape: Formula Dungeon
 
-A puzzle game where you solve spreadsheet formula challenges before the spike walls crush you. 10 rooms, escalating difficulty, no build step.
+A puzzle game where you solve spreadsheet formula challenges before the spike walls crush you. 11 rooms, escalating difficulty, no build step.
 
 Live: https://excel-escape.vercel.app/
 
@@ -32,6 +32,7 @@ The formula engine implements a focused subset of spreadsheet syntax:
 - `MAX(range)`, `MIN(range)`
 - `COUNT(range)`, `COUNTIF(range, criteria)` where criteria is `">20"`, `"<=5"`, `"=10"`, etc.
 - `IF(condition, trueValue, falseValue)`
+- `VLOOKUP(lookup_value, table_array, col_index, 0)` (exact match)
 - `ABS(x)`, `ROUND(x)`, `INT(x)`
 - Cell references: `A1`, `B2`, etc. Ranges: `A1:A5`.
 - Text concatenation with `&`: `=A1&" "&B1`.
